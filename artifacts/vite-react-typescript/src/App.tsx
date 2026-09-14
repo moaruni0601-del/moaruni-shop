@@ -7,7 +7,7 @@ const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 // ==========================================
-// 🚨 V3: 모아루니 전용 설정 🚨
+// 🚨 V4: 모아루니 전용 설정 🚨
 // ==========================================
 const SHOP_NAME = "Moaruni"; 
 const SHOP_NAME_KR = "모아루니"; 
@@ -32,7 +32,6 @@ export default function App() {
   const [cart, setCart] = useState<any[]>([]);
   const [currentView, setCurrentView] = useState('home'); 
 
-  // Store Settings (계좌번호 DB 연동 로직 안정화)
   const [bankInfo, setBankInfo] = useState({ id: '', bank_name: '', account_number: '', depositor_name: '' });
   const [editBankInfo, setEditBankInfo] = useState({ id: '', bank_name: '', account_number: '', depositor_name: '' });
 
@@ -141,7 +140,6 @@ export default function App() {
     }
   };
 
-  // ✅ 수정됨: 상점 설정(계좌번호) 불러오기 로직 안정화
   const fetchStoreSettings = async () => {
     try {
       const { data, error } = await supabase.from('store_settings').select('*').limit(1);
@@ -314,7 +312,7 @@ export default function App() {
       if (error) throw error;
       if (data && data.length > 0) setMyOrders(data); 
       else alert("주문 내역을 찾을 수 없습니다.");
-    } catch (err) { alert("조회 중 오류가 발생했습니다."); }
+    } catch (err: any) { alert("조회 중 오류가 발생했습니다: " + err.message); }
   };
 
   const openCustomerEdit = (order: any) => {
@@ -346,9 +344,11 @@ export default function App() {
     if (window.confirm("❗주문을 영구히 삭제하시겠습니까?")) { await supabase.from('orders').delete().eq('id', id); fetchAdminOrders(); }
   };
 
-  const handleSmartPaste = () => {
+  // ✅ 수정됨: 한글 브랜드명 + KC 파싱 및 DB 자동 생성 로직 반영
+  const handleSmartPaste = async () => {
     if(!importText) return alert("화면에서 복사한 글자를 붙여넣어주세요.");
     let textToParse = importText; let parsedRetail = 0; let parsedWholesale = 0; let brandStr = ''; let nameStr = ''; let colorStr = ''; let sizeStr = '';
+
     const retailMatch = textToParse.match(/소비자가\s*([\d,]+)원?/);
     if(retailMatch) { parsedRetail = parseInt(retailMatch[1].replace(/,/g, '')); textToParse = textToParse.replace(retailMatch[0], ''); }
     const wholesaleMatch = textToParse.match(/판매가\s*([\d,]+)원?/);
@@ -384,27 +384,50 @@ export default function App() {
            } else { sizeStr = rawRange; }
         }
     }
+
     const lines = textToParse.split('\n').map(l => l.trim()).filter(l => l);
     for (let i = 0; i < lines.length; i++) {
         let line = lines[i]; if(line.includes('상품상세') || line === '추천' || line.includes('할인')) continue;
-        if(line.match(/[A-Za-z]+KC/i) || line.length > 3) {
+
+        // 한글+영문 숫자가 섞인 브랜드 추출 정규식 (예: 포크칩스KC, CONKC)
+        if(line.match(/[A-Za-z가-힣0-9]+KC/i) || line.length > 3) {
             const parts = line.split(' ').filter(Boolean);
             if(parts.length > 0) {
                 let firstWord = parts[0];
-                if(firstWord.toUpperCase().endsWith('KC')) { brandStr = firstWord.slice(0, -2); nameStr = parts.slice(1).join(' ').replace(/소비자가/g, '').replace(/판매가/g, '').trim(); }
-                else if(firstWord.match(/^[A-Za-z]+$/)) { brandStr = firstWord; nameStr = parts.slice(1).join(' ').replace(/소비자가/g, '').replace(/판매가/g, '').trim(); }
+                if(firstWord.toUpperCase().endsWith('KC')) { 
+                    brandStr = firstWord.slice(0, -2); // "KC" 텍스트 제거
+                    nameStr = parts.slice(1).join(' ').replace(/소비자가/g, '').replace(/판매가/g, '').trim(); 
+                }
+                else if(firstWord.match(/^[A-Za-z가-힣0-9]+$/)) { 
+                    brandStr = firstWord; 
+                    nameStr = parts.slice(1).join(' ').replace(/소비자가/g, '').replace(/판매가/g, '').trim(); 
+                }
                 else { nameStr = line.replace(/소비자가/g, '').replace(/판매가/g, '').trim(); }
             }
             break; 
         }
     }
+
     if(parsedRetail > 0) setProdPrice(parsedRetail.toString());
     if(parsedWholesale > 0) setProdCostPrice(parsedWholesale.toString());
-    if(brandStr) setProdBrand(brandStr);
+
+    // 브랜드명이 추출되었을 경우, 기존 DB에 없다면 자동으로 추가하는 로직
+    if(brandStr) { 
+        setProdBrand(brandStr); 
+        const isBrandExist = brands.some(b => b.name === brandStr);
+        if (!isBrandExist) {
+            const { data, error } = await supabase.from('brands').insert([{ name: brandStr }]).select();
+            if (!error && data) {
+                setBrands(prev => [...prev, data[0]]);
+            }
+        }
+    }
+
     if(nameStr) setProdName(nameStr.replace(/[*<>\[\]]/g, '').trim());
     if(colorStr) setProdColors(colorStr);
     if(sizeStr) setProdSizes(sizeStr);
-    alert("✅ 텍스트 자동 분류 완료! 추출된 옵션을 확인해주세요."); setImportText(''); 
+    alert("✅ 텍스트 자동 분류 완료! (새로운 브랜드가 감지되면 자동으로 등록되었습니다)"); 
+    setImportText(''); 
   };
 
   const handleSaveProduct = async () => {
@@ -559,7 +582,6 @@ export default function App() {
         input:focus, textarea:focus { border-color: ${THEME.primary} !important; }
       `}</style>
 
-      {/* ✅ 수정됨: 관리자 화면(admin, adminLogin)일 경우 공지사항 팝업 노출 안됨 */}
       {showNoticeModal && notice && currentView !== 'admin' && currentView !== 'adminLogin' && (
         <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.6)', zIndex: 9999, display: 'flex', justifyContent: 'center', alignItems: 'center', backdropFilter: 'blur(2px)' }}>
           <div style={{ backgroundColor: '#fff', borderRadius: '20px', width: '85%', maxWidth: '400px', overflow: 'hidden', boxShadow: '0 10px 30px rgba(0,0,0,0.2)' }}>
@@ -1229,7 +1251,6 @@ export default function App() {
           {adminTab === 'settings' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
 
-              {/* 🚨 V3 수정됨: 계좌번호 불러오기 및 저장 로직 예외 처리 강화 🚨 */}
               <div style={{ backgroundColor: '#fff', padding: '25px', borderRadius: '16px', boxShadow: '0 2px 10px rgba(0,0,0,0.03)' }}>
                 <h3 style={{ fontSize: '18px', marginBottom: '10px', fontWeight: 'bold', color: THEME.text }}>💳 입금 계좌 설정</h3>
                 <p style={{ fontSize: '13px', color: THEME.subText, marginBottom: '20px' }}>고객이 주문 완료 시 안내받을 입금 계좌를 설정합니다.</p>
