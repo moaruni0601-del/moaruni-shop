@@ -7,34 +7,23 @@ const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 // ==========================================
-// 🚨 여기서부터 의뢰인 맞춤 정보로 수정하세요 🚨
+// 🚨 V2: 모아루니 전용 설정 🚨
 // ==========================================
-const SHOP_NAME = "Moaruni"; // 영문 쇼핑몰 이름
-const SHOP_NAME_KR = "모아루니"; // 한글 쇼핑몰 이름
-const ADMIN_PASSWORD = "kk109895!"; // 관리자 비밀번호
-const BANK_INFO = { bank: "국민은행", account: "000000-00-000000", name: "홍길동" }; // 계좌 정보
-const KAKAO_CHAT_URL = "https://open.kakao.com/o/s9kAMwNi"; // 카카오톡 1:1 채팅 링크
+const SHOP_NAME = "Moaruni"; 
+const SHOP_NAME_KR = "모아루니"; 
+const ADMIN_PASSWORD = "kk109895!"; 
+const KAKAO_CHAT_URL = "https://open.kakao.com/o/s9kAMwNi"; 
 
-// 모아루니 로고에 맞춘 따뜻하고 포근한 테마 색상 (베이지/브라운/소프트피치)
 const THEME = {
-  primary: '#D29C8B', // 포인트 색상 (따뜻한 피치브라운)
-  primaryLight: '#F7EBE1', // 연한 배경 색상 (베이지톤)
-  bg: '#FAF6F0', // 전체 배경 색상 (크림 웜톤)
-  text: '#4A3D36', // 텍스트 색상 (진한 브라운)
-  subText: '#8E7B71', // 보조 텍스트 (중간 브라운)
-  border: '#E8DED7', // 테두리 색상
-  brown: '#7A5B4C' // 로고의 진한 갈색 포인트
+  primary: '#D29C8B', 
+  primaryLight: '#F7EBE1', 
+  bg: '#FAF6F0', 
+  text: '#4A3D36', 
+  subText: '#8E7B71', 
+  border: '#E8DED7', 
+  brown: '#7A5B4C' 
 };
 // ==========================================
-
-const BASE_CATEGORIES = {
-  '아우터': ['코트', '가디건', '자켓', '점퍼', '집업'],
-  '탑': [], '원피스': [], '바지': ['청바지', '반바지', '슈트', '팬츠'], '스커트': [], '상하 세트': [],
-  '홈웨어': ['실내복', '속옷'],
-  '베이비': ['아우터', '탑', '슈트', '스커트', '원피스', '상하복', '실내복', '팬츠', '악세사리/잡화'],
-  '슈즈': ['운동화/슬립온', '구두/플랫', '샌들/슬리퍼', '어그/부츠/워커', '장화'],
-  '악세사리': ['헤어', '양말', '가방', '모자', '목도리&스카프', '기타']
-};
 
 export default function App() {
   const [products, setProducts] = useState<any[]>([]);
@@ -42,6 +31,10 @@ export default function App() {
   const [brands, setBrands] = useState<any[]>([]);
   const [cart, setCart] = useState<any[]>([]);
   const [currentView, setCurrentView] = useState('home'); 
+
+  // Store Settings (계좌번호 DB 연동 - UUID 대응)
+  const [bankInfo, setBankInfo] = useState({ id: '', bank_name: '', account_number: '', depositor_name: '' });
+  const [editBankInfo, setEditBankInfo] = useState({ id: '', bank_name: '', account_number: '', depositor_name: '' });
 
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
   const [selectedSize, setSelectedSize] = useState('');
@@ -110,6 +103,7 @@ export default function App() {
 
   const [isUploading, setIsUploading] = useState(false);
   const [importText, setImportText] = useState('');
+
   const [catLarge, setCatLarge] = useState('');
   const [catMedium, setCatMedium] = useState('');
   const [newBrand, setNewBrand] = useState('');
@@ -125,6 +119,7 @@ export default function App() {
     fetchCategories();
     fetchBrands();
     fetchNoticesAndBanner();
+    fetchStoreSettings();
 
     const handleBeforeInstallPrompt = (e: any) => {
       e.preventDefault();
@@ -143,6 +138,37 @@ export default function App() {
       }
     } else {
       alert("아이폰(Safari)은 하단의 [공유] 버튼(↑)을 누르고 [홈 화면에 추가]를 선택해주세요!\n\n이미 설치되어 있거나 현재 브라우저에서 지원하지 않을 수 있습니다.");
+    }
+  };
+
+  // 상점 설정(계좌번호) 불러오기
+  const fetchStoreSettings = async () => {
+    try {
+      const { data, error } = await supabase.from('store_settings').select('*').limit(1).single();
+      if (data) {
+        setBankInfo({ id: data.id, bank_name: data.bank_name, account_number: data.account_number, depositor_name: data.depositor_name });
+        setEditBankInfo({ id: data.id, bank_name: data.bank_name, account_number: data.account_number, depositor_name: data.depositor_name });
+      }
+    } catch (err) {
+      console.error("설정 불러오기 실패", err);
+    }
+  };
+
+  // 상점 설정 저장하기
+  const saveStoreSettings = async () => {
+    try {
+      if (!editBankInfo.id) return alert("저장할 설정 정보(ID)를 찾을 수 없습니다.");
+      const { error } = await supabase.from('store_settings').update({
+        bank_name: editBankInfo.bank_name,
+        account_number: editBankInfo.account_number,
+        depositor_name: editBankInfo.depositor_name
+      }).eq('id', editBankInfo.id);
+
+      if (error) throw error;
+      alert("계좌 정보가 성공적으로 변경되었습니다.");
+      fetchStoreSettings();
+    } catch (err:any) {
+      alert("저장 실패: " + err.message);
     }
   };
 
@@ -165,9 +191,6 @@ export default function App() {
         setIntroMainInput(parts[0] || '');
         setIntroSub(parts[1] || '');
         setIntroSubInput(parts[1] || '');
-      } else {
-        setIntroMainInput(`매일매일 입고 싶은 옷,\n고민 없이 ${SHOP_NAME_KR} 🎈`);
-        setIntroSubInput("편안함에 감성을 더한\n우리 아이 맞춤 옷장🎀");
       }
     }
   };
@@ -201,7 +224,7 @@ export default function App() {
   };
 
   const getStatusStyle = (status: string) => {
-    if (status === '입금대기') return { bg: '#EAE2DB', text: '#6B5B53' }; // 무채색/베이지 톤에 맞춤
+    if (status === '입금대기') return { bg: '#EAE2DB', text: '#6B5B53' }; 
     if (status === '결제완료') return { bg: '#e3f2fd', text: '#1976d2' };
     if (status === '배송지연') return { bg: '#fff3e0', text: '#e65100' };
     if (status === '발송완료') return { bg: '#e8f5e9', text: '#2e7d32' };
@@ -581,13 +604,15 @@ export default function App() {
     }
   };
 
-  const addCategory = async () => { 
-    const fullName = [catLarge, catMedium].filter(Boolean).join(' > ');
-    if(!fullName) return alert("대분류를 하나 이상 입력해주세요.");
+  // 카테고리 추가 로직 고도화 V2 (대분류 입력 시 중분류 창 표시)
+  const addCategory = async (largeCat: string, mediumCat: string) => { 
+    if(!largeCat) return alert("대분류를 입력해주세요.");
+    const fullName = mediumCat ? `${largeCat} > ${mediumCat}` : largeCat;
     await supabase.from('categories').insert([{ name: fullName }]); 
     setCatLarge(''); setCatMedium(''); fetchCategories(); 
   };
   const deleteCategory = async (id: number) => { if (window.confirm("삭제하시겠습니까?")) { await supabase.from('categories').delete().eq('id', id); fetchCategories(); } };
+
   const addBrand = async () => { if(newBrand) { await supabase.from('brands').insert([{ name: newBrand }]); setNewBrand(''); fetchBrands(); } };
   const deleteBrand = async (id: number) => { if (window.confirm("삭제하시겠습니까?")) { await supabase.from('brands').delete().eq('id', id); fetchBrands(); } };
 
@@ -613,7 +638,7 @@ export default function App() {
   const stats = calculateStats();
 
   const getCombinedCategories = () => {
-    const tree: Record<string, string[]> = JSON.parse(JSON.stringify(BASE_CATEGORIES));
+    const tree: Record<string, string[]> = {};
     (categories || []).forEach(c => {
       const parts = c.name.split('>');
       const main = parts[0].trim();
@@ -733,7 +758,7 @@ export default function App() {
                 <div key={p.id} onClick={() => openProductDetail(p)} style={{ cursor: 'pointer' }}>
                   <div style={{ position: 'relative', marginBottom: '12px' }}>
                     <img src={p.main_image} style={{ width: '100%', borderRadius: '12px', aspectRatio: '4/5', objectFit: 'cover', backgroundColor: '#eee' }} />
-                    {isNewProduct(p.created_at) && <span style={{ position: 'absolute', top: '8px', left: '8px', backgroundColor: THEME.primary, color: 'white', padding: '4px 10px', borderRadius: '6px', fontSize: '10px', fontWeight: 'bold', boxShadow: '0 2px 5px rgba(240,106,125,0.3)' }}>✨ NEW</span>}
+                    {isNewProduct(p.created_at) && <span style={{ position: 'absolute', top: '8px', left: '8px', backgroundColor: THEME.primary, color: 'white', padding: '4px 10px', borderRadius: '6px', fontSize: '10px', fontWeight: 'bold', boxShadow: '0 2px 5px rgba(210,156,139,0.3)' }}>✨ NEW</span>}
                   </div>
                   <p style={{ fontSize: '12px', fontWeight: 'bold', color: THEME.primary, margin: '0 0 4px 0' }}>{p.brand || '자체제작'}</p>
                   <h3 style={{ fontSize: '15px', margin: '0 0 6px 0', fontWeight: '500', color: THEME.text, lineHeight: '1.3' }}>{p.name}</h3>
@@ -1011,8 +1036,8 @@ export default function App() {
 
           <div style={{ backgroundColor: '#F9F9F9', padding: '20px', borderRadius: '12px', marginBottom: '30px' }}>
             <p style={{ fontSize: '13px', color: THEME.subText, margin: '0 0 8px 0' }}>입금 계좌번호</p>
-            <p style={{ fontSize: '18px', fontWeight: 'bold', margin: '0 0 5px 0', color: THEME.text }}>{BANK_INFO.bank} {BANK_INFO.account}</p>
-            <p style={{ fontSize: '14px', margin: 0, color: THEME.subText }}>예금주: {BANK_INFO.name}</p>
+            <p style={{ fontSize: '18px', fontWeight: 'bold', margin: '0 0 5px 0', color: THEME.text }}>{bankInfo.bank_name} {bankInfo.account_number}</p>
+            <p style={{ fontSize: '14px', margin: 0, color: THEME.subText }}>예금주: {bankInfo.depositor_name}</p>
           </div>
 
           <button onClick={handleSaveQuotation} style={{ width: '100%', padding: '16px', backgroundColor: THEME.primary, color: 'white', border: 'none', borderRadius: '30px', fontSize: '16px', fontWeight: 'bold', marginBottom: '30px' }}>
@@ -1325,6 +1350,16 @@ export default function App() {
           {adminTab === 'settings' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
 
+              {/* 🚨 V2 추가: 계좌번호 관리 UI (DB 연동 완료) 🚨 */}
+              <div style={{ backgroundColor: '#fff', padding: '25px', borderRadius: '16px', boxShadow: '0 2px 10px rgba(0,0,0,0.03)' }}>
+                <h3 style={{ fontSize: '18px', marginBottom: '10px', fontWeight: 'bold', color: THEME.text }}>💳 입금 계좌 설정</h3>
+                <p style={{ fontSize: '13px', color: THEME.subText, marginBottom: '20px' }}>고객이 주문 완료 시 안내받을 입금 계좌를 설정합니다.</p>
+                <input placeholder="은행명 (예: 농협)" value={editBankInfo.bank_name} onChange={e => setEditBankInfo({...editBankInfo, bank_name: e.target.value})} style={{ width: '100%', padding: '12px', borderRadius: '12px', border: `1px solid ${THEME.border}`, fontSize: '14px', marginBottom: '10px' }} />
+                <input placeholder="계좌번호 (예: 000-0000-0000-00)" value={editBankInfo.account_number} onChange={e => setEditBankInfo({...editBankInfo, account_number: e.target.value})} style={{ width: '100%', padding: '12px', borderRadius: '12px', border: `1px solid ${THEME.border}`, fontSize: '14px', marginBottom: '10px' }} />
+                <input placeholder="예금주 (예: 모아루니 대표)" value={editBankInfo.depositor_name} onChange={e => setEditBankInfo({...editBankInfo, depositor_name: e.target.value})} style={{ width: '100%', padding: '12px', borderRadius: '12px', border: `1px solid ${THEME.border}`, fontSize: '14px', marginBottom: '15px' }} />
+                <button onClick={saveStoreSettings} style={{ width: '100%', padding: '14px', backgroundColor: THEME.text, color: 'white', borderRadius: '10px', fontWeight: 'bold', border: 'none' }}>계좌 정보 저장하기</button>
+              </div>
+
               <div style={{ backgroundColor: '#fff', padding: '25px', borderRadius: '16px', boxShadow: '0 2px 10px rgba(0,0,0,0.03)' }}>
                 <h3 style={{ fontSize: '18px', marginBottom: '10px', fontWeight: 'bold', color: THEME.text }}>📝 홈 화면 메인 문구 변경</h3>
                 <p style={{ fontSize: '13px', color: THEME.subText, marginBottom: '20px' }}>홈 화면 상단에 노출되는 두 줄의 인사말을 변경합니다.</p>
@@ -1386,18 +1421,62 @@ export default function App() {
                 </div>
               </div>
 
+              {/* 🚨 V2 추가: 카테고리(대/중) 직관적 추가 UI 적용 완료 🚨 */}
               <div style={{ backgroundColor: '#fff', padding: '25px', borderRadius: '16px', boxShadow: '0 2px 10px rgba(0,0,0,0.03)' }}>
-                <h3 style={{ fontSize: '18px', marginBottom: '20px', fontWeight: 'bold', color: THEME.text }}>분류(대/중) 관리</h3>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '20px' }}>
-                  <div style={{ display: 'flex', gap: '8px', flexDirection: 'row' }}>
-                    <input placeholder="대분류 (예: 아우터)" value={catLarge} onChange={e => setCatLarge(e.target.value)} style={{ flex: 1, minWidth: 0, padding: '12px', borderRadius: '10px', border: `1px solid ${THEME.border}`, fontSize: '14px' }} />
-                    <input placeholder="중분류 (예: 코트)" value={catMedium} onChange={e => setCatMedium(e.target.value)} style={{ flex: 1, minWidth: 0, padding: '12px', borderRadius: '10px', border: `1px solid ${THEME.border}`, fontSize: '14px' }} />
-                  </div>
-                  <button onClick={addCategory} style={{ padding: '12px', backgroundColor: THEME.text, color: 'white', borderRadius: '10px', fontWeight: 'bold' }}>카테고리 추가</button>
+                <h3 style={{ fontSize: '18px', marginBottom: '10px', fontWeight: 'bold', color: THEME.text }}>카테고리(대/중) 관리</h3>
+                <p style={{ fontSize: '13px', color: THEME.subText, marginBottom: '20px' }}>등록된 카테고리를 확인하고 직관적으로 추가/삭제할 수 있습니다.</p>
+
+                {/* 등록된 카테고리 트리뷰 */}
+                <div style={{ backgroundColor: THEME.bg, padding: '15px', borderRadius: '12px', marginBottom: '20px', maxHeight: '200px', overflowY: 'auto' }}>
+                  <p style={{ fontSize: '12px', fontWeight: 'bold', marginBottom: '10px', color: THEME.primary }}>[현재 등록된 카테고리 리스트]</p>
+                  {Object.keys(categoryTree).length === 0 ? (
+                    <p style={{ fontSize: '13px', color: THEME.subText }}>등록된 카테고리가 없습니다.</p>
+                  ) : (
+                    Object.keys(categoryTree).map(mainCat => (
+                      <div key={mainCat} style={{ marginBottom: '10px' }}>
+                        <div style={{ fontWeight: 'bold', color: THEME.text, fontSize: '14px' }}>{mainCat}</div>
+                        {categoryTree[mainCat].length > 0 && (
+                          <div style={{ paddingLeft: '10px', marginTop: '5px', fontSize: '13px', color: THEME.subText }}>
+                            {categoryTree[mainCat].map(sub => (
+                              <div key={`${mainCat}-${sub}`}>- {sub}</div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    ))
+                  )}
                 </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '15px', padding: '20px', border: `1px solid ${THEME.border}`, borderRadius: '12px' }}>
+                  <div>
+                    <p style={{ fontSize: '13px', fontWeight: 'bold', marginBottom: '10px', color: THEME.text }}>1. 대분류 선택 또는 직접 입력</p>
+                    {Object.keys(categoryTree).length > 0 && (
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '12px' }}>
+                        {Object.keys(categoryTree).map(main => (
+                          <span key={main} onClick={() => setCatLarge(main)} style={{ padding: '8px 14px', backgroundColor: catLarge === main ? THEME.primary : THEME.bg, color: catLarge === main ? 'white' : THEME.text, borderRadius: '20px', fontSize: '13px', cursor: 'pointer', border: `1px solid ${catLarge === main ? THEME.primary : THEME.border}`, fontWeight: catLarge === main ? 'bold' : 'normal' }}>
+                            {main}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                    <input placeholder="새로운 대분류 입력 (필수)" value={catLarge} onChange={e => setCatLarge(e.target.value)} style={{ width: '100%', padding: '12px', borderRadius: '10px', border: `1px solid ${THEME.border}`, fontSize: '14px' }} />
+                  </div>
+
+                  {catLarge && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', backgroundColor: THEME.primaryLight, padding: '15px', borderRadius: '10px' }}>
+                      <div style={{ flex: 1 }}>
+                        <p style={{ fontSize: '13px', fontWeight: 'bold', color: THEME.primary, marginBottom: '8px' }}>2. '{catLarge}'에 추가할 중분류 입력</p>
+                        <input placeholder="중분류 입력 (선택)" value={catMedium} onChange={e => setCatMedium(e.target.value)} style={{ width: '100%', padding: '12px', borderRadius: '10px', border: `1px solid ${THEME.primary}`, fontSize: '14px' }} />
+                      </div>
+                      <button onClick={() => addCategory(catLarge, catMedium)} style={{ padding: '12px 20px', height: '100%', marginTop: '26px', backgroundColor: THEME.primary, color: 'white', borderRadius: '10px', fontWeight: 'bold', whiteSpace: 'nowrap', border: 'none' }}>추가하기</button>
+                    </div>
+                  )}
+                </div>
+
+                <p style={{ fontSize: '12px', fontWeight: 'bold', marginBottom: '8px', marginTop: '25px', color: '#c62828' }}>등록된 카테고리 삭제</p>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px' }}>
                   {(categories || []).map(c => (
-                    <span key={c.id} style={{ padding: '8px 14px', backgroundColor: THEME.bg, border: `1px solid ${THEME.border}`, borderRadius: '20px', fontSize: '14px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span key={c.id} style={{ padding: '8px 14px', backgroundColor: '#fff', border: `1px solid ${THEME.border}`, color: THEME.text, borderRadius: '20px', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '8px' }}>
                       {c.name} <Trash2 size={16} color="#c62828" style={{ cursor: 'pointer' }} onClick={() => deleteCategory(c.id)} />
                     </span>
                   ))}
