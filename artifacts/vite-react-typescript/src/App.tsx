@@ -7,7 +7,7 @@ const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 // ==========================================
-// 🚨 V2: 모아루니 전용 설정 🚨
+// 🚨 V3: 모아루니 전용 설정 🚨
 // ==========================================
 const SHOP_NAME = "Moaruni"; 
 const SHOP_NAME_KR = "모아루니"; 
@@ -32,7 +32,7 @@ export default function App() {
   const [cart, setCart] = useState<any[]>([]);
   const [currentView, setCurrentView] = useState('home'); 
 
-  // Store Settings (계좌번호 DB 연동 - UUID 대응)
+  // Store Settings (계좌번호 DB 연동 로직 안정화)
   const [bankInfo, setBankInfo] = useState({ id: '', bank_name: '', account_number: '', depositor_name: '' });
   const [editBankInfo, setEditBankInfo] = useState({ id: '', bank_name: '', account_number: '', depositor_name: '' });
 
@@ -141,23 +141,22 @@ export default function App() {
     }
   };
 
-  // 상점 설정(계좌번호) 불러오기
+  // ✅ 수정됨: 상점 설정(계좌번호) 불러오기 로직 안정화
   const fetchStoreSettings = async () => {
     try {
-      const { data, error } = await supabase.from('store_settings').select('*').limit(1).single();
-      if (data) {
-        setBankInfo({ id: data.id, bank_name: data.bank_name, account_number: data.account_number, depositor_name: data.depositor_name });
-        setEditBankInfo({ id: data.id, bank_name: data.bank_name, account_number: data.account_number, depositor_name: data.depositor_name });
+      const { data, error } = await supabase.from('store_settings').select('*').limit(1);
+      if (data && data.length > 0) {
+        setBankInfo(data[0]);
+        setEditBankInfo(data[0]);
       }
     } catch (err) {
       console.error("설정 불러오기 실패", err);
     }
   };
 
-  // 상점 설정 저장하기
   const saveStoreSettings = async () => {
     try {
-      if (!editBankInfo.id) return alert("저장할 설정 정보(ID)를 찾을 수 없습니다.");
+      if (!editBankInfo.id) return alert("저장할 설정 정보(ID)를 찾을 수 없습니다. 페이지를 새로고침 해보세요.");
       const { error } = await supabase.from('store_settings').update({
         bank_name: editBankInfo.bank_name,
         account_number: editBankInfo.account_number,
@@ -215,11 +214,11 @@ export default function App() {
   };
 
   const fetchCategories = async () => {
-    const { data } = await supabase.from('categories').select('*').order('id', { ascending: true });
+    const { data, error } = await supabase.from('categories').select('*').order('id', { ascending: true });
     if (data) setCategories(data);
   };
   const fetchBrands = async () => {
-    const { data } = await supabase.from('brands').select('*').order('id', { ascending: true });
+    const { data, error } = await supabase.from('brands').select('*').order('id', { ascending: true });
     if (data) setBrands(data);
   };
 
@@ -246,14 +245,8 @@ export default function App() {
     const shareUrl = `${window.location.origin}${window.location.pathname}?productId=${selectedProduct.id}`;
     if (navigator.share) {
       try {
-        await navigator.share({
-          title: selectedProduct.name,
-          text: `${selectedProduct.name} - ${SHOP_NAME_KR}에서 확인해보세요!`,
-          url: shareUrl,
-        });
-      } catch (err) {
-        console.log("공유 취소됨");
-      }
+        await navigator.share({ title: selectedProduct.name, text: `${selectedProduct.name} - ${SHOP_NAME_KR}에서 확인해보세요!`, url: shareUrl });
+      } catch (err) { console.log("공유 취소됨"); }
     } else {
       navigator.clipboard.writeText(shareUrl);
       alert("상품 링크가 복사되었습니다! 원하시는 곳에 붙여넣기 하세요.");
@@ -283,7 +276,7 @@ export default function App() {
       order_number: orderNumber, customer_name: orderName, phone: orderPhone, address: orderAddress, memo: orderMemo, total_amount: totalOrderAmount, status: '입금대기'
     }]).select();
 
-    if (error) return alert("오류가 발생했습니다.");
+    if (error) return alert("주문 오류가 발생했습니다. RLS 설정을 확인해주세요: " + error.message);
     if (newOrder && newOrder[0]) {
       const orderItems = cart.map(item => {
         const optionText = [item.selectedColor, item.selectedSize].filter(Boolean).join(' / ');
@@ -355,187 +348,90 @@ export default function App() {
 
   const handleSmartPaste = () => {
     if(!importText) return alert("화면에서 복사한 글자를 붙여넣어주세요.");
-
-    let textToParse = importText;
-    let parsedRetail = 0;
-    let parsedWholesale = 0;
-    let brandStr = '';
-    let nameStr = '';
-    let colorStr = '';
-    let sizeStr = '';
-
+    let textToParse = importText; let parsedRetail = 0; let parsedWholesale = 0; let brandStr = ''; let nameStr = ''; let colorStr = ''; let sizeStr = '';
     const retailMatch = textToParse.match(/소비자가\s*([\d,]+)원?/);
-    if(retailMatch) {
-        parsedRetail = parseInt(retailMatch[1].replace(/,/g, ''));
-        textToParse = textToParse.replace(retailMatch[0], '');
-    }
-
+    if(retailMatch) { parsedRetail = parseInt(retailMatch[1].replace(/,/g, '')); textToParse = textToParse.replace(retailMatch[0], ''); }
     const wholesaleMatch = textToParse.match(/판매가\s*([\d,]+)원?/);
-    if(wholesaleMatch) {
-        parsedWholesale = parseInt(wholesaleMatch[1].replace(/,/g, ''));
-        textToParse = textToParse.replace(wholesaleMatch[0], '');
-    }
-
+    if(wholesaleMatch) { parsedWholesale = parseInt(wholesaleMatch[1].replace(/,/g, '')); textToParse = textToParse.replace(wholesaleMatch[0], ''); }
     const colorMatch = textToParse.match(/[<\[(]([가-힣a-zA-Z0-9]+(?:\s*\/\s*[가-힣a-zA-Z0-9]+)+)[>\])]/);
-    if(colorMatch) {
-        colorStr = colorMatch[1].split('/').map(s=>s.trim()).join(', ');
-        textToParse = textToParse.replace(colorMatch[0], '');
-    }
-
+    if(colorMatch) { colorStr = colorMatch[1].split('/').map(s=>s.trim()).join(', '); textToParse = textToParse.replace(colorMatch[0], ''); }
     const sizeMatch = textToParse.match(/\*?([0-9a-zA-Z()가-힣]+(?:\s*~\s*[0-9a-zA-Z()가-힣]+)+)\*?/);
     if(sizeMatch) {
         let rawRange = sizeMatch[1].replace(/\s+/g, '').toUpperCase(); 
         textToParse = textToParse.replace(sizeMatch[0], '');
-
         const SIZE_PRESETS = [
-          ['XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL'],
-          ['JS', 'JM', 'JL'],
-          ['1(XS)', '2(S)', '3(M)', '4(L)', '5(XL)', '6(XXL)'],
-          ['XS(3호)', 'S(5호)', 'M(7호)', 'L(9호)', 'XL(11호)', 'XXL(13호)'],
-          ['S(1~3M)', 'M(3~6M)', 'L(6~12M)', 'XL(12~18M)'],
-          ['S(1~3M)', 'M(3~6M)', 'L(9~12M)', 'XL(12~18M)'], 
-          ['S(3~6M)', 'M(6~12M)', 'L(12~18M)', 'XL(18~24M)'],
-          ['3M', '6M', '9M', '12M', '18M', '24M'],
-          ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12'],
-          ['3', '5', '7', '9', '11', '13', '15', '17', '19'],
-          ['50', '60', '70', '80', '90'],
-          ['70', '80', '90', '100', '110', '120'],
-          ['100', '110', '120', '130', '140', '150', '160']
+          ['XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL'], ['JS', 'JM', 'JL'], ['1(XS)', '2(S)', '3(M)', '4(L)', '5(XL)', '6(XXL)'], ['XS(3호)', 'S(5호)', 'M(7호)', 'L(9호)', 'XL(11호)', 'XXL(13호)'],
+          ['S(1~3M)', 'M(3~6M)', 'L(6~12M)', 'XL(12~18M)'], ['S(1~3M)', 'M(3~6M)', 'L(9~12M)', 'XL(12~18M)'], ['S(3~6M)', 'M(6~12M)', 'L(12~18M)', 'XL(18~24M)'],
+          ['3M', '6M', '9M', '12M', '18M', '24M'], ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12'], ['3', '5', '7', '9', '11', '13', '15', '17', '19'],
+          ['50', '60', '70', '80', '90'], ['70', '80', '90', '100', '110', '120'], ['100', '110', '120', '130', '140', '150', '160']
         ];
-
         let found = false;
         for (const preset of SIZE_PRESETS) {
           const normPreset = preset.map(s => s.replace(/\s+/g, '').toUpperCase());
           const matchParts = rawRange.split('~');
           if(matchParts.length !== 2) continue;
-
-          const normStart = matchParts[0];
-          const normEnd = matchParts[1];
-
-          const startIndex = normPreset.indexOf(normStart);
-          const endIndex = normPreset.indexOf(normEnd);
-
-          if (startIndex !== -1 && endIndex !== -1 && startIndex < endIndex) {
-             sizeStr = preset.slice(startIndex, endIndex + 1).join(', ');
-             found = true;
-             break;
-          }
+          const startIndex = normPreset.indexOf(matchParts[0]); const endIndex = normPreset.indexOf(matchParts[1]);
+          if (startIndex !== -1 && endIndex !== -1 && startIndex < endIndex) { sizeStr = preset.slice(startIndex, endIndex + 1).join(', '); found = true; break; }
         }
-
         if (!found) {
-           const matchParts = rawRange.split('~');
-           let sNum = parseInt(matchParts[0].replace(/[^0-9]/g, ''));
-           let eNum = parseInt(matchParts[1].replace(/[^0-9]/g, ''));
-           let suffix = matchParts[0].replace(/[0-9]/g, '');
-
+           const matchParts = rawRange.split('~'); let sNum = parseInt(matchParts[0].replace(/[^0-9]/g, '')); let eNum = parseInt(matchParts[1].replace(/[^0-9]/g, '')); let suffix = matchParts[0].replace(/[0-9]/g, '');
            if (!isNaN(sNum) && !isNaN(eNum) && sNum < eNum && (eNum - sNum) <= 30) {
               let step = 1;
               if (sNum >= 50 && eNum >= 60 && (eNum - sNum) % 10 === 0) step = 10;
               else if (sNum % 2 !== 0 && eNum % 2 !== 0 && sNum >= 3 && sNum <= 15) step = 2; 
-              else if (suffix.toUpperCase() === 'M') {
-                 if ((eNum - sNum) % 6 === 0) step = 6;
-                 else if ((eNum - sNum) % 3 === 0) step = 3;
-              }
-
-              let gen = [];
-              for(let i = sNum; i <= eNum; i += step) {
-                 gen.push(i.toString() + suffix);
-              }
-              sizeStr = gen.join(', ');
-           } else {
-              sizeStr = rawRange; 
-           }
+              else if (suffix.toUpperCase() === 'M') { if ((eNum - sNum) % 6 === 0) step = 6; else if ((eNum - sNum) % 3 === 0) step = 3; }
+              let gen = []; for(let i = sNum; i <= eNum; i += step) { gen.push(i.toString() + suffix); } sizeStr = gen.join(', ');
+           } else { sizeStr = rawRange; }
         }
     }
-
     const lines = textToParse.split('\n').map(l => l.trim()).filter(l => l);
     for (let i = 0; i < lines.length; i++) {
-        let line = lines[i];
-        if(line.includes('상품상세') || line === '추천' || line.includes('할인')) continue;
-
+        let line = lines[i]; if(line.includes('상품상세') || line === '추천' || line.includes('할인')) continue;
         if(line.match(/[A-Za-z]+KC/i) || line.length > 3) {
             const parts = line.split(' ').filter(Boolean);
             if(parts.length > 0) {
                 let firstWord = parts[0];
-                if(firstWord.toUpperCase().endsWith('KC')) {
-                    brandStr = firstWord.slice(0, -2);
-                    nameStr = parts.slice(1).join(' ').replace(/소비자가/g, '').replace(/판매가/g, '').trim();
-                } else if(firstWord.match(/^[A-Za-z]+$/)) { 
-                    brandStr = firstWord;
-                    nameStr = parts.slice(1).join(' ').replace(/소비자가/g, '').replace(/판매가/g, '').trim();
-                } else {
-                    nameStr = line.replace(/소비자가/g, '').replace(/판매가/g, '').trim();
-                }
+                if(firstWord.toUpperCase().endsWith('KC')) { brandStr = firstWord.slice(0, -2); nameStr = parts.slice(1).join(' ').replace(/소비자가/g, '').replace(/판매가/g, '').trim(); }
+                else if(firstWord.match(/^[A-Za-z]+$/)) { brandStr = firstWord; nameStr = parts.slice(1).join(' ').replace(/소비자가/g, '').replace(/판매가/g, '').trim(); }
+                else { nameStr = line.replace(/소비자가/g, '').replace(/판매가/g, '').trim(); }
             }
             break; 
         }
     }
-
     if(parsedRetail > 0) setProdPrice(parsedRetail.toString());
     if(parsedWholesale > 0) setProdCostPrice(parsedWholesale.toString());
     if(brandStr) setProdBrand(brandStr);
     if(nameStr) setProdName(nameStr.replace(/[*<>\[\]]/g, '').trim());
     if(colorStr) setProdColors(colorStr);
     if(sizeStr) setProdSizes(sizeStr);
-
-    alert("✅ 텍스트 자동 분류 완료! 추출된 옵션을 확인해주세요.");
-    setImportText(''); 
+    alert("✅ 텍스트 자동 분류 완료! 추출된 옵션을 확인해주세요."); setImportText(''); 
   };
 
   const handleSaveProduct = async () => {
     if (!prodName || !prodPrice) return alert("상품명, 판매 가격은 필수입니다!");
-    if (!editingProductId && !existingMainImageUrl && (!prodFiles || prodFiles.length === 0)) {
-      return alert("새 상품 등록 시 대표 사진(썸네일) 파일 첨부는 필수입니다!");
-    }
+    if (!editingProductId && !existingMainImageUrl && (!prodFiles || prodFiles.length === 0)) { return alert("새 상품 등록 시 대표 사진(썸네일) 파일 첨부는 필수입니다!"); }
     setIsUploading(true);
     try {
-      let main_image = existingMainImageUrl || undefined; 
-      let sub_images_array: string[] = [];
-
-      if (inputSubImageUrls) {
-        sub_images_array.push(...inputSubImageUrls.split(/,|\n/).map(s => s.trim()).filter(Boolean));
-      }
-
+      let main_image = existingMainImageUrl || undefined; let sub_images_array: string[] = [];
+      if (inputSubImageUrls) sub_images_array.push(...inputSubImageUrls.split(/,|\n/).map(s => s.trim()).filter(Boolean));
       if (prodFiles && prodFiles.length > 0) {
         for (let i = 0; i < prodFiles.length; i++) {
-          const file = prodFiles[i];
-          const fileName = `main_${Date.now()}_${i}.${file.name.split('.').pop()}`;
-          await supabase.storage.from('products').upload(fileName, file);
-          const { data } = supabase.storage.from('products').getPublicUrl(fileName);
-
-          if (i === 0) main_image = data.publicUrl;
-          else sub_images_array.push(data.publicUrl); 
+          const file = prodFiles[i]; const fileName = `main_${Date.now()}_${i}.${file.name.split('.').pop()}`;
+          await supabase.storage.from('products').upload(fileName, file); const { data } = supabase.storage.from('products').getPublicUrl(fileName);
+          if (i === 0) main_image = data.publicUrl; else sub_images_array.push(data.publicUrl); 
         }
       }
-
       if (subProdFiles && subProdFiles.length > 0) {
         for (let i = 0; i < subProdFiles.length; i++) {
-          const file = subProdFiles[i];
-          const fileName = `sub_${Date.now()}_${i}.${file.name.split('.').pop()}`;
-          await supabase.storage.from('products').upload(fileName, file);
-          const { data } = supabase.storage.from('products').getPublicUrl(fileName);
+          const file = subProdFiles[i]; const fileName = `sub_${Date.now()}_${i}.${file.name.split('.').pop()}`;
+          await supabase.storage.from('products').upload(fileName, file); const { data } = supabase.storage.from('products').getPublicUrl(fileName);
           sub_images_array.push(data.publicUrl);
         }
       }
-
-      const productData: any = { 
-        name: prodName, 
-        price: parseInt(prodPrice), 
-        cost_price: parseInt(prodCostPrice) || 0,
-        category: prodCategory, 
-        brand: prodBrand, 
-        description: prodDesc, 
-        sizes: prodSizes, 
-        colors: prodColors 
-      };
-
+      const productData: any = { name: prodName, price: parseInt(prodPrice), cost_price: parseInt(prodCostPrice) || 0, category: prodCategory, brand: prodBrand, description: prodDesc, sizes: prodSizes, colors: prodColors };
       if (main_image) productData.main_image = main_image; 
       if (sub_images_array.length > 0) productData.sub_images = sub_images_array.join(',');
-
-      if (editingProductId && sub_images_array.length === 0 && inputSubImageUrls === '') {
-        productData.sub_images = null;
-      }
-
+      if (editingProductId && sub_images_array.length === 0 && inputSubImageUrls === '') productData.sub_images = null;
       if (editingProductId) {
         const { error } = await supabase.from('products').update(productData).eq('id', editingProductId);
         if(error) throw error; alert("✅ 상품 수정 완료!");
@@ -544,8 +440,7 @@ export default function App() {
         if(error) throw error; alert("🎉 새 상품 등록 완료!");
       }
       resetProductForm(); await fetchProducts(); setAdminTab('productEdit');
-    } catch (err: any) { alert("오류 발생: " + err.message); } 
-    finally { setIsUploading(false); }
+    } catch (err: any) { alert("오류 발생: " + err.message); } finally { setIsUploading(false); }
   };
 
   const resetProductForm = () => {
@@ -569,10 +464,8 @@ export default function App() {
         imageUrl = data.publicUrl;
       }
       const { error } = await supabase.from('notices').upsert([{ id: 1, content: noticeInput, image_url: imageUrl, is_active: status }]);
-      if (error) throw error;
-      alert(`공지사항이 ${status ? '팝업 활성화' : '팝업 숨김'} 처리되었습니다.`); fetchNoticesAndBanner();
-    } catch (error: any) { alert("공지 저장 실패: " + error.message); }
-    finally { setIsNoticeUploading(false); }
+      if (error) throw error; alert(`공지사항이 ${status ? '팝업 활성화' : '팝업 숨김'} 처리되었습니다.`); fetchNoticesAndBanner();
+    } catch (error: any) { alert("공지 저장 실패: " + error.message); } finally { setIsNoticeUploading(false); }
   };
 
   const handleSaveMainBanner = async () => {
@@ -583,10 +476,8 @@ export default function App() {
       await supabase.storage.from('products').upload(fileName, bannerFile);
       const { data } = supabase.storage.from('products').getPublicUrl(fileName);
       const { error } = await supabase.from('notices').upsert([{ id: 2, image_url: data.publicUrl, is_active: true }]);
-      if (error) throw error;
-      alert("메인 배너가 성공적으로 적용되었습니다!"); setBannerFile(null); fetchNoticesAndBanner();
-    } catch (error: any) { alert("배너 저장 실패: " + error.message); }
-    finally { setIsBannerUploading(false); }
+      if (error) throw error; alert("메인 배너가 성공적으로 적용되었습니다!"); setBannerFile(null); fetchNoticesAndBanner();
+    } catch (error: any) { alert("배너 저장 실패: " + error.message); } finally { setIsBannerUploading(false); }
   };
 
   const handleSaveIntro = async () => {
@@ -594,44 +485,35 @@ export default function App() {
     try {
       const content = `${introMainInput}||${introSubInput}`;
       const { error } = await supabase.from('notices').upsert([{ id: 3, content: content, is_active: true }]);
-      if(error) throw error;
-      alert("메인 문구가 성공적으로 변경되었습니다!");
-      fetchNoticesAndBanner();
-    } catch(e:any) {
-      alert("문구 저장 실패: " + e.message);
-    } finally {
-      setIsIntroUploading(false);
-    }
+      if(error) throw error; alert("메인 문구가 성공적으로 변경되었습니다!"); fetchNoticesAndBanner();
+    } catch(e:any) { alert("문구 저장 실패: " + e.message); } finally { setIsIntroUploading(false); }
   };
 
-  // 카테고리 추가 로직 고도화 V2 (대분류 입력 시 중분류 창 표시)
   const addCategory = async (largeCat: string, mediumCat: string) => { 
     if(!largeCat) return alert("대분류를 입력해주세요.");
     const fullName = mediumCat ? `${largeCat} > ${mediumCat}` : largeCat;
-    await supabase.from('categories').insert([{ name: fullName }]); 
+    const { error } = await supabase.from('categories').insert([{ name: fullName }]); 
+    if(error) return alert("추가 실패. RLS 설정을 확인하세요.");
     setCatLarge(''); setCatMedium(''); fetchCategories(); 
   };
   const deleteCategory = async (id: number) => { if (window.confirm("삭제하시겠습니까?")) { await supabase.from('categories').delete().eq('id', id); fetchCategories(); } };
 
-  const addBrand = async () => { if(newBrand) { await supabase.from('brands').insert([{ name: newBrand }]); setNewBrand(''); fetchBrands(); } };
+  const addBrand = async () => { 
+    if(newBrand) { 
+      const { error } = await supabase.from('brands').insert([{ name: newBrand }]); 
+      if(error) return alert("브랜드 추가 실패. RLS 설정을 확인하세요.");
+      setNewBrand(''); fetchBrands(); 
+    } 
+  };
   const deleteBrand = async (id: number) => { if (window.confirm("삭제하시겠습니까?")) { await supabase.from('brands').delete().eq('id', id); fetchBrands(); } };
 
   const calculateStats = () => {
     const validOrders = adminOrders.filter(o => ['결제완료', '배송지연', '발송완료'].includes(o.status));
-    let totalOrderAmount = 0; 
-    let totalProductSales = 0; 
-    let totalCost = 0;  
-
+    let totalOrderAmount = 0; let totalProductSales = 0; let totalCost = 0;  
     validOrders.forEach(order => {
       totalOrderAmount += order.total_amount;
-      if(order.order_items) {
-        order.order_items.forEach((item: any) => {
-          totalProductSales += item.price * item.quantity;
-          totalCost += (item.cost_price || 0) * item.quantity;
-        });
-      }
+      if(order.order_items) { order.order_items.forEach((item: any) => { totalProductSales += item.price * item.quantity; totalCost += (item.cost_price || 0) * item.quantity; }); }
     });
-
     const netProfit = totalProductSales - totalCost; 
     return { totalOrderAmount, totalProductSales, totalCost, netProfit, orderCount: validOrders.length };
   };
@@ -640,8 +522,7 @@ export default function App() {
   const getCombinedCategories = () => {
     const tree: Record<string, string[]> = {};
     (categories || []).forEach(c => {
-      const parts = c.name.split('>');
-      const main = parts[0].trim();
+      const parts = c.name.split('>'); const main = parts[0].trim();
       if (!tree[main]) tree[main] = [];
       if (parts.length > 1) {
         const sub = parts.slice(1).map((p:string) => p.trim()).join(' > ');
@@ -656,11 +537,8 @@ export default function App() {
     const matchBrand = activeBrand === '전체' || p.brand === activeBrand;
     let matchCategory = true;
     if (activeLargeCat !== '전체') {
-      if (activeSmallCat !== '전체') {
-        matchCategory = p.category === `${activeLargeCat} > ${activeSmallCat}`;
-      } else {
-        matchCategory = p.category && p.category.startsWith(activeLargeCat);
-      }
+      if (activeSmallCat !== '전체') { matchCategory = p.category === `${activeLargeCat} > ${activeSmallCat}`; } 
+      else { matchCategory = p.category && p.category.startsWith(activeLargeCat); }
     }
     const normalize = (str: string) => (str || '').replace(/\s+/g, '').toLowerCase();
     const normalizedQuery = normalize(searchQuery);
@@ -681,7 +559,8 @@ export default function App() {
         input:focus, textarea:focus { border-color: ${THEME.primary} !important; }
       `}</style>
 
-      {showNoticeModal && notice && (
+      {/* ✅ 수정됨: 관리자 화면(admin, adminLogin)일 경우 공지사항 팝업 노출 안됨 */}
+      {showNoticeModal && notice && currentView !== 'admin' && currentView !== 'adminLogin' && (
         <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.6)', zIndex: 9999, display: 'flex', justifyContent: 'center', alignItems: 'center', backdropFilter: 'blur(2px)' }}>
           <div style={{ backgroundColor: '#fff', borderRadius: '20px', width: '85%', maxWidth: '400px', overflow: 'hidden', boxShadow: '0 10px 30px rgba(0,0,0,0.2)' }}>
             {notice.image_url && <img src={notice.image_url} style={{ width: '100%', maxHeight: '250px', objectFit: 'cover' }} />}
@@ -900,7 +779,7 @@ export default function App() {
       {currentView === 'cart' && (
         <div style={{ padding: '20px', backgroundColor: '#fff', minHeight: '100vh' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '25px' }}>
-            <h2 style={{ fontSize: '20px', fontWeight: 'bold', margin: 0 }}>장바구니</h2>
+            <h2 style={{ fontSize: '20px', fontWeight: 'bold', margin: '0' }}>장바구니</h2>
             <span style={{ fontSize: '13px', color: THEME.subText, cursor: 'pointer' }} onClick={() => setCart([])}>전체삭제</span>
           </div>
 
@@ -1350,7 +1229,7 @@ export default function App() {
           {adminTab === 'settings' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
 
-              {/* 🚨 V2 추가: 계좌번호 관리 UI (DB 연동 완료) 🚨 */}
+              {/* 🚨 V3 수정됨: 계좌번호 불러오기 및 저장 로직 예외 처리 강화 🚨 */}
               <div style={{ backgroundColor: '#fff', padding: '25px', borderRadius: '16px', boxShadow: '0 2px 10px rgba(0,0,0,0.03)' }}>
                 <h3 style={{ fontSize: '18px', marginBottom: '10px', fontWeight: 'bold', color: THEME.text }}>💳 입금 계좌 설정</h3>
                 <p style={{ fontSize: '13px', color: THEME.subText, marginBottom: '20px' }}>고객이 주문 완료 시 안내받을 입금 계좌를 설정합니다.</p>
@@ -1421,12 +1300,10 @@ export default function App() {
                 </div>
               </div>
 
-              {/* 🚨 V2 추가: 카테고리(대/중) 직관적 추가 UI 적용 완료 🚨 */}
               <div style={{ backgroundColor: '#fff', padding: '25px', borderRadius: '16px', boxShadow: '0 2px 10px rgba(0,0,0,0.03)' }}>
                 <h3 style={{ fontSize: '18px', marginBottom: '10px', fontWeight: 'bold', color: THEME.text }}>카테고리(대/중) 관리</h3>
                 <p style={{ fontSize: '13px', color: THEME.subText, marginBottom: '20px' }}>등록된 카테고리를 확인하고 직관적으로 추가/삭제할 수 있습니다.</p>
 
-                {/* 등록된 카테고리 트리뷰 */}
                 <div style={{ backgroundColor: THEME.bg, padding: '15px', borderRadius: '12px', marginBottom: '20px', maxHeight: '200px', overflowY: 'auto' }}>
                   <p style={{ fontSize: '12px', fontWeight: 'bold', marginBottom: '10px', color: THEME.primary }}>[현재 등록된 카테고리 리스트]</p>
                   {Object.keys(categoryTree).length === 0 ? (
