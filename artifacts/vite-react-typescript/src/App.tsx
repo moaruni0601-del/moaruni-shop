@@ -7,7 +7,7 @@ const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 // ==========================================
-// 🚨 V4: 모아루니 전용 설정 🚨
+// 🚨 V5: 모아루니 전용 설정 🚨
 // ==========================================
 const SHOP_NAME = "Moaruni"; 
 const SHOP_NAME_KR = "모아루니"; 
@@ -152,16 +152,27 @@ export default function App() {
     }
   };
 
+  // ✅ V5 수정: ID가 없으면 에러가 아닌 자동 Insert(생성)로 처리되도록 고도화
   const saveStoreSettings = async () => {
     try {
-      if (!editBankInfo.id) return alert("저장할 설정 정보(ID)를 찾을 수 없습니다. 페이지를 새로고침 해보세요.");
-      const { error } = await supabase.from('store_settings').update({
-        bank_name: editBankInfo.bank_name,
-        account_number: editBankInfo.account_number,
-        depositor_name: editBankInfo.depositor_name
-      }).eq('id', editBankInfo.id);
+      if (!editBankInfo.id) {
+        // 기존 정보(ID)가 없으면 새롭게 테이블에 한 줄 추가 (Insert)
+        const { error } = await supabase.from('store_settings').insert([{
+          bank_name: editBankInfo.bank_name,
+          account_number: editBankInfo.account_number,
+          depositor_name: editBankInfo.depositor_name
+        }]);
+        if (error) throw error;
+      } else {
+        // 기존 정보가 있으면 기존 데이터 수정 (Update)
+        const { error } = await supabase.from('store_settings').update({
+          bank_name: editBankInfo.bank_name,
+          account_number: editBankInfo.account_number,
+          depositor_name: editBankInfo.depositor_name
+        }).eq('id', editBankInfo.id);
+        if (error) throw error;
+      }
 
-      if (error) throw error;
       alert("계좌 정보가 성공적으로 변경되었습니다.");
       fetchStoreSettings();
     } catch (err:any) {
@@ -344,7 +355,6 @@ export default function App() {
     if (window.confirm("❗주문을 영구히 삭제하시겠습니까?")) { await supabase.from('orders').delete().eq('id', id); fetchAdminOrders(); }
   };
 
-  // ✅ 수정됨: 한글 브랜드명 + KC 파싱 및 DB 자동 생성 로직 반영
   const handleSmartPaste = async () => {
     if(!importText) return alert("화면에서 복사한 글자를 붙여넣어주세요.");
     let textToParse = importText; let parsedRetail = 0; let parsedWholesale = 0; let brandStr = ''; let nameStr = ''; let colorStr = ''; let sizeStr = '';
@@ -389,13 +399,12 @@ export default function App() {
     for (let i = 0; i < lines.length; i++) {
         let line = lines[i]; if(line.includes('상품상세') || line === '추천' || line.includes('할인')) continue;
 
-        // 한글+영문 숫자가 섞인 브랜드 추출 정규식 (예: 포크칩스KC, CONKC)
         if(line.match(/[A-Za-z가-힣0-9]+KC/i) || line.length > 3) {
             const parts = line.split(' ').filter(Boolean);
             if(parts.length > 0) {
                 let firstWord = parts[0];
                 if(firstWord.toUpperCase().endsWith('KC')) { 
-                    brandStr = firstWord.slice(0, -2); // "KC" 텍스트 제거
+                    brandStr = firstWord.slice(0, -2); 
                     nameStr = parts.slice(1).join(' ').replace(/소비자가/g, '').replace(/판매가/g, '').trim(); 
                 }
                 else if(firstWord.match(/^[A-Za-z가-힣0-9]+$/)) { 
@@ -411,7 +420,6 @@ export default function App() {
     if(parsedRetail > 0) setProdPrice(parsedRetail.toString());
     if(parsedWholesale > 0) setProdCostPrice(parsedWholesale.toString());
 
-    // 브랜드명이 추출되었을 경우, 기존 DB에 없다면 자동으로 추가하는 로직
     if(brandStr) { 
         setProdBrand(brandStr); 
         const isBrandExist = brands.some(b => b.name === brandStr);
@@ -1251,6 +1259,7 @@ export default function App() {
           {adminTab === 'settings' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
 
+              {/* 🚨 V5 수정됨: 계좌번호 불러오기 및 저장 로직 예외 처리 강화 🚨 */}
               <div style={{ backgroundColor: '#fff', padding: '25px', borderRadius: '16px', boxShadow: '0 2px 10px rgba(0,0,0,0.03)' }}>
                 <h3 style={{ fontSize: '18px', marginBottom: '10px', fontWeight: 'bold', color: THEME.text }}>💳 입금 계좌 설정</h3>
                 <p style={{ fontSize: '13px', color: THEME.subText, marginBottom: '20px' }}>고객이 주문 완료 시 안내받을 입금 계좌를 설정합니다.</p>
