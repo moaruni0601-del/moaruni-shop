@@ -1,0 +1,5 @@
+{
+  "name": "모아루니 (Moaruni)", "short_name": "모아루니", "start_url": "/", "display": "standalone",
+  "background_color": "#FAF6F0", "theme_color": "#D29C8B",
+  "icons": [{ "src": "/logo.png", "sizes": "192x192 512x512", "type": "image/png", "purpose": "any maskable" }]
+}
