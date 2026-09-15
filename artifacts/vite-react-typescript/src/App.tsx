@@ -863,9 +863,26 @@ export default function App() {
                 <label style={{ fontSize: '14px', fontWeight: 'bold', color: THEME.text, display: 'block', marginBottom: '8px' }}>연락처 <span style={{color: THEME.primary}}>*</span></label>
                 <input placeholder="010-0000-0000" value={orderPhone} onChange={e => setOrderPhone(e.target.value)} style={{ width: '100%', padding: '15px', borderRadius: '12px', border: `1px solid ${THEME.border}`, fontSize: '15px' }} />
              </div>
-             <div>
+            <div>
                 <label style={{ fontSize: '14px', fontWeight: 'bold', color: THEME.text, display: 'block', marginBottom: '8px' }}>배송지 <span style={{color: THEME.primary}}>*</span></label>
-                <input placeholder="주소를 검색해주세요" value={orderAddress} onChange={e => setOrderAddress(e.target.value)} style={{ width: '100%', padding: '15px', borderRadius: '12px', border: `1px solid ${THEME.border}`, fontSize: '15px', marginBottom: '10px' }} />
+                <div style={{ display: 'flex', gap: '10px', marginBottom: '10px' }}>
+                  <input placeholder="버튼을 눌러 주소를 검색해주세요" value={orderAddress} onChange={e => setOrderAddress(e.target.value)} style={{ flex: 1, padding: '15px', borderRadius: '12px', border: `1px solid ${THEME.border}`, fontSize: '14px' }} />
+                  <button onClick={() => {
+                    new (window as any).daum.Postcode({
+                      oncomplete: function(data: any) {
+                        let fullAddress = data.address;
+                        let extraAddress = '';
+                        if (data.addressType === 'R') {
+                          if (data.bname !== '') extraAddress += data.bname;
+                          if (data.buildingName !== '') extraAddress += (extraAddress !== '' ? `, ${data.buildingName}` : data.buildingName);
+                          fullAddress += (extraAddress !== '' ? ` (${extraAddress})` : '');
+                        }
+                        setOrderAddress(fullAddress + ' '); // 검색된 주소 뒤에 띄어쓰기 한 칸 추가
+                      }
+                    }).open();
+                  }} style={{ padding: '0 20px', backgroundColor: THEME.text, color: 'white', border: 'none', borderRadius: '12px', fontWeight: 'bold', fontSize: '14px', whiteSpace: 'nowrap' }}>주소 찾기</button>
+                </div>
+                <p style={{ fontSize: '12px', color: THEME.subText, margin: '0 0 10px 0' }}>* 검색 완료 후 상세 주소(동/호수)를 이어서 입력해 주세요.</p>
              </div>
              <div>
                 <label style={{ fontSize: '14px', fontWeight: 'bold', color: THEME.text, display: 'block', marginBottom: '8px' }}>요청사항</label>
