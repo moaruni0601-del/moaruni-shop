@@ -27,6 +27,7 @@ const THEME = {
 
 export default function App() {
   const [products, setProducts] = useState<any[]>([]);
+  const [currentPage, setCurrentPage] = useState(1); // 🌟 V6: 페이지 상태 추가
   const [categories, setCategories] = useState<any[]>([]);
   const [brands, setBrands] = useState<any[]>([]);
   const [cart, setCart] = useState<any[]>([]);
@@ -108,13 +109,16 @@ export default function App() {
   const [newBrand, setNewBrand] = useState('');
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
 
-  const handleGoHome = () => {
-    window.history.replaceState(null, '', window.location.pathname);
-    setCurrentView('home');
-  };
+    const handleGoHome = () => {
+      window.history.replaceState(null, '', window.location.pathname);
+      setCurrentView('home');
+    };
 
-  useEffect(() => {
-    fetchProducts();
+    // 🌟 V6: 카테고리나 브랜드 변경 시 1페이지로 자동 리셋
+    useEffect(() => { setCurrentPage(1); }, [activeBrand, activeLargeCat, activeSmallCat, searchQuery]);
+
+    useEffect(() => {
+      fetchProducts();
     fetchCategories();
     fetchBrands();
     fetchNoticesAndBanner();
@@ -203,9 +207,10 @@ export default function App() {
     }
   };
 
-  const fetchProducts = async () => {
-    const { data } = await supabase.from('products').select('*').order('created_at', { ascending: false });
-    if (data) {
+      const fetchProducts = async () => {
+        // 🌟 V6: 진열점수(display_order) 높은 순으로 1차 정렬 후 최신순 정렬
+        const { data } = await supabase.from('products').select('*').order('display_order', { ascending: false }).order('created_at', { ascending: false });
+        if (data) {
       setProducts(data);
       const params = new URLSearchParams(window.location.search);
       const pId = params.get('productId');
@@ -291,7 +296,7 @@ export default function App() {
         const optionText = [item.selectedColor, item.selectedSize].filter(Boolean).join(' / ');
         return { 
           order_id: newOrder[0].id, 
-          product_name: `${item.name} ${optionText ? `(${optionText})` : ''}`, 
+          product_name: `[${item.brand || '자체제작'}] ${item.name} ${optionText ? `(${optionText})` : ''}`, 
           price: item.price, 
           quantity: item.quantity,
           cost_price: item.cost_price
@@ -577,10 +582,15 @@ export default function App() {
     return matchBrand && matchCategory && matchSearch;
   });
 
-  const filteredAdminOrders = adminOrders.filter(o => adminFilter === '전체' ? true : adminFilter === '취소/환불' ? (o.status === '주문취소' || o.status === '환불처리') : o.status === adminFilter);
+      const filteredAdminOrders = adminOrders.filter(o => adminFilter === '전체' ? true : adminFilter === '취소/환불' ? (o.status === '주문취소' || o.status === '환불처리') : o.status === adminFilter);
 
-  return (
-    <div style={{ backgroundColor: THEME.bg, minHeight: '100vh', fontFamily: "'Pretendard', 'Noto Sans KR', sans-serif", paddingBottom: '110px', color: THEME.text }}>
+      // 🌟 V6: 20개씩 자르기 (페이지네이션 계산 로직)
+      const ITEMS_PER_PAGE = 20;
+      const totalPages = Math.ceil(displayProducts.length / ITEMS_PER_PAGE);
+      const paginatedProducts = displayProducts.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
+
+      return (
+        <div style={{ backgroundColor: THEME.bg, minHeight: '100vh', fontFamily: "'Pretendard', 'Noto Sans KR', sans-serif", paddingBottom: '110px', color: THEME.text }}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@400;700&display=swap');
         @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
@@ -662,9 +672,9 @@ export default function App() {
               </div>
             )}
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', marginTop: '10px' }}>
-              {displayProducts.map((p) => (
-                <div key={p.id} onClick={() => openProductDetail(p)} style={{ cursor: 'pointer' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', marginTop: '10px' }}>
+                    {paginatedProducts.map((p) => (
+                      <div key={p.id} onClick={() => openProductDetail(p)} style={{ cursor: 'pointer' }}>
                   <div style={{ position: 'relative', marginBottom: '12px' }}>
                     <img src={p.main_image} style={{ width: '100%', borderRadius: '12px', aspectRatio: '4/5', objectFit: 'cover', backgroundColor: '#eee' }} />
                     {isNewProduct(p.created_at) && <span style={{ position: 'absolute', top: '8px', left: '8px', backgroundColor: THEME.primary, color: 'white', padding: '4px 10px', borderRadius: '6px', fontSize: '10px', fontWeight: 'bold', boxShadow: '0 2px 5px rgba(210,156,139,0.3)' }}>✨ NEW</span>}
@@ -672,24 +682,38 @@ export default function App() {
                   <p style={{ fontSize: '12px', fontWeight: 'bold', color: THEME.primary, margin: '0 0 4px 0' }}>{p.brand || '자체제작'}</p>
                   <h3 style={{ fontSize: '15px', margin: '0 0 6px 0', fontWeight: '500', color: THEME.text, lineHeight: '1.3' }}>{p.name}</h3>
                   {p.sizes && <p style={{ fontSize: '12px', color: THEME.subText, margin: '0 0 6px 0' }}>{p.sizes}</p>}
-                  <p style={{ fontSize: '17px', fontWeight: 'bold', color: THEME.text, margin: 0 }}>{p.price.toLocaleString()}원</p>
+          <p style={{ fontSize: '17px', fontWeight: 'bold', color: THEME.text, margin: 0 }}>{p.price.toLocaleString()}원</p>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
 
-      {currentView === 'category' && (
+                {/* 🌟 V6: 페이지네이션 버튼 UI */}
+                {totalPages > 1 && (
+                  <div style={{ display: 'flex', justifyContent: 'center', gap: '8px', marginTop: '30px' }}>
+                    {Array.from({ length: totalPages }, (_, i) => i + 1).map(pageNum => (
+                      <button key={pageNum} onClick={() => { setCurrentPage(pageNum); window.scrollTo(0,0); }} style={{ width: '32px', height: '32px', borderRadius: '50%', backgroundColor: currentPage === pageNum ? THEME.primary : '#fff', color: currentPage === pageNum ? '#fff' : THEME.subText, border: `1px solid ${currentPage === pageNum ? THEME.primary : THEME.border}`, fontWeight: 'bold', fontSize: '14px', padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        {pageNum}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+              </div>
+            </div>
+          )}
+
+          {currentView === 'category' && (
         <div style={{ padding: '20px' }}>
           <h2 style={{ fontSize: '20px', marginBottom: '20px', fontWeight: 'bold' }}>전체 카테고리</h2>
 
           <div style={{ backgroundColor: '#fff', borderRadius: '15px', padding: '10px', marginBottom: '20px', boxShadow: '0 2px 10px rgba(0,0,0,0.02)' }}>
             <h3 style={{ fontSize: '15px', color: THEME.primary, padding: '10px', borderBottom: `1px solid ${THEME.border}`, fontWeight: 'bold' }}>브랜드관</h3>
             <div style={{ display: 'flex', flexWrap: 'wrap', padding: '10px 5px' }}>
-              <div onClick={() => { setActiveBrand('전체'); handleGoHome(); }} style={{ width: '50%', padding: '12px 10px', fontSize: '15px', cursor: 'pointer', fontWeight: activeBrand === '전체' ? 'bold' : 'normal', color: activeBrand === '전체' ? THEME.primary : THEME.text }}>전체 브랜드</div>
+              <div onClick={() => { setActiveBrand('전체'); handleGoHome(); }} style={{ width: '50%', padding: '12px 10px', fontSize: '15px', cursor: 'pointer', fontWeight: activeBrand === '전체' ? 'bold' : 'normal', color: activeBrand === '전체' ? THEME.primary : THEME.text }}>전체 브랜드 ({products.length})</div>
               {brands.map(b => (
-                <div key={b.id} onClick={() => { setActiveBrand(b.name); handleGoHome(); }} style={{ width: '50%', padding: '12px 10px', fontSize: '15px', cursor: 'pointer', fontWeight: activeBrand === b.name ? 'bold' : 'normal', color: activeBrand === b.name ? THEME.primary : THEME.text }}>{b.name}</div>
+                <div key={b.id} onClick={() => { setActiveBrand(b.name); handleGoHome(); }} style={{ width: '50%', padding: '12px 10px', fontSize: '15px', cursor: 'pointer', fontWeight: activeBrand === b.name ? 'bold' : 'normal', color: activeBrand === b.name ? THEME.primary : THEME.text }}>
+                  {b.name} <span style={{fontSize:'12px', color:THEME.subText}}>({products.filter(p => p.brand === b.name).length})</span>
+                </div>
               ))}
             </div>
           </div>
@@ -1042,9 +1066,12 @@ export default function App() {
                     <div style={{ borderTop: `1px dashed ${THEME.border}`, paddingTop: '20px', marginBottom: '20px' }}>
                       <p style={{ fontSize: '14px', fontWeight: 'bold', marginBottom: '12px', color: THEME.text }}>주문 상품</p>
                       {order.order_items && order.order_items.map((item:any, i:number) => (
-                        <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px', color: '#555', marginBottom: '8px' }}>
-                          <span>{item.product_name} <span style={{color:THEME.subText}}>({item.quantity}개)</span></span>
-                          <span style={{ fontWeight: 'bold', color: THEME.text }}>{(item.price * item.quantity).toLocaleString()}원</span>
+                        <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px', color: '#555', marginBottom: '12px', alignItems: 'flex-start' }}>
+                          <div style={{ flex: 1, paddingRight: '10px' }}>
+                            <p style={{ margin: '0 0 4px 0', lineHeight: '1.4' }}>{item.product_name}</p>
+                            <span style={{ color: THEME.subText, fontSize: '12px' }}>단가: {item.price.toLocaleString()}원 / 수량: {item.quantity}개</span>
+                          </div>
+                          <span style={{ fontWeight: 'bold', color: THEME.text, whiteSpace: 'nowrap' }}>{(item.price * item.quantity).toLocaleString()}원</span>
                         </div>
                       ))}
                     </div>
@@ -1142,9 +1169,12 @@ export default function App() {
 
                     <div style={{ borderLeft: `3px solid ${THEME.border}`, paddingLeft: '15px', marginBottom: '20px' }}>
                       {order.order_items && order.order_items.map((item:any, i:number) => (
-                        <p key={i} style={{ fontSize: '14px', margin: '0 0 6px 0', color: THEME.text }}>
-                          {item.product_name} <span style={{fontWeight:'bold'}}>({item.quantity}개)</span>
-                        </p>
+                        <div key={i} style={{ marginBottom: '10px' }}>
+                          <p style={{ fontSize: '14px', margin: '0 0 4px 0', color: THEME.text, lineHeight: '1.4' }}>
+                            {item.product_name}
+                          </p>
+                          <p style={{ fontSize: '12px', color: THEME.subText, margin: 0 }}>단가: {item.price.toLocaleString()}원 / <span style={{fontWeight:'bold', color:THEME.text}}>수량: {item.quantity}개</span></p>
+                        </div>
                       ))}
                     </div>
 
@@ -1262,7 +1292,21 @@ export default function App() {
                     <p style={{ fontSize: '13px', fontWeight: 'bold', color: THEME.primary, margin: '0 0 6px 0' }}>{p.brand}</p>
                     <p style={{ fontSize: '16px', fontWeight: 'bold', margin: '0 0 6px 0' }}>{p.name}</p>
                     <p style={{ fontSize: '15px', color: THEME.text, margin: '0 0 5px 0' }}>판매가: {p.price.toLocaleString()}원</p>
-                    <p style={{ fontSize: '12px', color: THEME.subText, margin: '0 0 15px 0' }}>매입원가: {(p.cost_price || 0).toLocaleString()}원</p>
+                    <p style={{ fontSize: '12px', color: THEME.subText, margin: '0 0 10px 0' }}>매입원가: {(p.cost_price || 0).toLocaleString()}원</p>
+
+                    {/* 🌟 V6: 진열 순서 수정 기능 */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginBottom: '15px', fontSize: '12px' }}>
+                      <span style={{ fontWeight: 'bold' }}>진열 점수:</span>
+                      <input type="number" defaultValue={p.display_order || 0} onBlur={async (e) => {
+                        const newOrder = parseInt(e.target.value) || 0;
+                        if(p.display_order !== newOrder) {
+                          await supabase.from('products').update({ display_order: newOrder }).eq('id', p.id);
+                          fetchProducts();
+                        }
+                      }} style={{ width: '50px', padding: '4px', borderRadius: '4px', border: `1px solid ${THEME.border}`, textAlign: 'center' }} />
+                      <span style={{ color: THEME.subText, fontSize: '11px' }}>(높을수록 상단에 노출됩니다)</span>
+                    </div>
+
                     <div style={{ display: 'flex', gap: '8px' }}>
                       <button onClick={() => openEditProduct(p)} style={{ flex: 1, padding: '8px', backgroundColor: THEME.text, color: 'white', border: 'none', borderRadius: '8px', fontSize: '13px', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '5px', fontWeight: 'bold' }}><Edit size={14} /> 수정</button>
                       <button onClick={() => deleteProduct(p.id)} style={{ flex: 1, padding: '8px', backgroundColor: '#fff', color: '#c62828', border: '1px solid #c62828', borderRadius: '8px', fontSize: '13px', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '5px', fontWeight: 'bold' }}><Trash2 size={14} /> 삭제</button>
