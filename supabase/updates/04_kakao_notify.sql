@@ -36,7 +36,7 @@ revoke all on public.kakao_notify_settings from anon, authenticated;
 
 -- 2) 주문별 알림 기록 (같은 주문을 두 번 보내지 않도록, 실패는 3번까지 다시 시도)
 create table if not exists public.kakao_notify_log (
-  order_id uuid primary key references public.orders(id) on delete cascade,
+  order_id bigint primary key references public.orders(id) on delete cascade,
   status text not null,              -- sent / failed
   attempts integer not null default 0,
   error text,

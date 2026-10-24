@@ -17,7 +17,7 @@ grant select (home_layout) on public.store_settings to anon;
 -- 3) 상품 순서 한 번에 저장 (관리자만)
 --    p_ids: 원하는 순서대로 나열한 상품 id 목록 → 1, 2, 3 ... 번호 부여
 --    p_ids 가 비어 있으면(null) 전체 순서 초기화 → 최신 등록순
-create or replace function public.set_product_order(p_ids uuid[])
+create or replace function public.set_product_order(p_ids bigint[])
 returns integer
 language plpgsql security definer set search_path = public
 as $$
@@ -41,8 +41,8 @@ begin
   return v_count;
 end;
 $$;
-revoke all on function public.set_product_order(uuid[]) from public, anon;
-grant execute on function public.set_product_order(uuid[]) to authenticated;
+revoke all on function public.set_product_order(bigint[]) from public, anon;
+grant execute on function public.set_product_order(bigint[]) to authenticated;
 
 -- 4) 확인용
 select count(*) as 전체상품, count(display_order) as 순서지정상품 from public.products;

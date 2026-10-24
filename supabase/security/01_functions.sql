@@ -176,7 +176,7 @@ grant execute on function public.lookup_orders(text, text, text) to anon, authen
 
 -- 6) 고객 배송지 수정 (본인 연락처가 맞고 '입금대기' 상태일 때만)
 create or replace function public.update_my_order(
-  p_order_id uuid,
+  p_order_id bigint,  -- 모아루니 주문 id 는 숫자형
   p_phone text,
   p_customer_name text,
   p_new_phone text,
@@ -201,4 +201,4 @@ begin
   return found;
 end;
 $$;
-grant execute on function public.update_my_order(uuid, text, text, text, text, text) to anon, authenticated;
+grant execute on function public.update_my_order(bigint, text, text, text, text, text) to anon, authenticated;
