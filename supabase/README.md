@@ -13,7 +13,7 @@ Supabase 프로젝트: `rtjifxjssyjmhggyhfyj` · Firebase: `moaruni-shop` · 주
 |---|---|---|---|
 | 1 | `security/00_moaruni_prepare.sql` | 없는 칸 추가 (상품 판매여부, 상호·채팅·배송비) | 없음 |
 | 2 | `security/01_functions.sql` | 주문 생성·조회·수정 함수, 관리자 명단 | 없음 |
-| 3 | `updates/01_batch1_settings.sql` ~ `05_new_category.sql` | 사업자정보·홈배치·품절·정가·카카오알림·새 분류 칸 | 없음 |
+| 3 | `updates/01_batch1_settings.sql` → `01b_moaruni_info.sql`(사업자 정보·관리자 이메일) → `02` ~ `05` | 사업자정보·홈배치·품절·정가·카카오알림·새 분류 칸 | 없음 |
 | 4 | 관리자 계정 | Authentication → Users → Add user (이메일·비밀번호, Auto Confirm) → `insert into public.admin_users(email) values ('관리자이메일');` / Sign up 허용 끄기 | 없음 |
 | 5 | 새 코드 배포 | Replit 빌드 → 테스트 주소 확인 → 실제 배포 | 새 화면 |
 | 6 | `security/02_lock_down.sql` | 고객정보·원가 잠금 (새 코드 배포 **뒤**에) | 예전 화면의 관리자 기능 막힘 |
