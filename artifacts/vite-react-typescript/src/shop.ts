@@ -10,6 +10,8 @@ export const SHOP = {
   // 📱 아이폰 기린 수집기 단축어 iCloud 링크 (있으면 관리자 수집함에 [단축어 추가하기] 버튼)
   iosShortcutUrl: 'https://www.icloud.com/shortcuts/39e27baf44804f448fc6b29fb22afe16',
   shippingFee: 3500,
+  // 🎄 크리스마스 꾸미기 색: a = 띠지·장식(쇼핑몰 대표색), b = 초록(띠지·배너)
+  xmas: { a: '#D29C8B', b: '#5C7A62', variant: 'moaruni', bg: '#F7EBE1', border: '#E1CDBF', tag: 'MOARUNI CHRISTMAS', title: '포근한 크리스마스 옷장', sub: '겨울 선물 같은 아이템을 모았어요', cta: '구경하기' },
   introMain: '매일매일 입고 싶은 옷,\n고민 없이 모아루니 🎈',
   introSub: '편안함에 감성을 더한\n우리 아이 맞춤 옷장🎀',
   theme: {
